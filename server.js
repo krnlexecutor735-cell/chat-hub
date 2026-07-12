@@ -2,33 +2,16 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
-const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-    maxHttpBufferSize: 1e7
+    maxHttpBufferSize: 1e7 // จำกัดขนาดไฟล์อัปโหลดไว้ที่ 10MB
 });
 
 const PORT = process.env.PORT || 3000;
 
-// รองรับการเปิดไฟล์ Static จากทั้งโฟลเดอร์ public และโฟลเดอร์นอกสุด (Root)
 app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.static(__dirname));
-
-// ฟังก์ชันหาตำแหน่งไฟล์ index.html
-app.get('/', (req, res) => {
-    const publicPath = path.join(__dirname, 'public', 'index.html');
-    const rootPath = path.join(__dirname, 'index.html');
-
-    if (fs.existsSync(publicPath)) {
-        res.sendFile(publicPath);
-    } else if (fs.existsSync(rootPath)) {
-        res.sendFile(rootPath);
-    } else {
-        res.status(404).send('ไม่พบไฟล์ index.html กรุณาตรวจสอบว่าชื่อไฟล์ถูกต้องและอยู่ภายในโปรเจกต์');
-    }
-});
 
 const activeUsers = new Set();
 const chatHistory = [];
@@ -46,6 +29,7 @@ io.on('connection', (socket) => {
             currentUsername = trimmedName;
             activeUsers.add(currentUsername);
             callback({ success: true });
+            
             socket.emit('chat-history', chatHistory);
             io.emit('user-joined', currentUsername);
         }
@@ -59,11 +43,11 @@ io.on('connection', (socket) => {
             sender: currentUsername,
             text: data.text || '',
             file: data.file || null,
-            timestamp: new Date().toLocaleTimeString()
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
 
         chatHistory.push(messageData);
-        if (chatHistory.length > 100) chatHistory.shift();
+        if (chatHistory.length > 150) chatHistory.shift();
 
         io.emit('new-message', messageData);
     });
