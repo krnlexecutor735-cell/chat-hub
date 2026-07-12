@@ -2,290 +2,365 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real-time Shared Space</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Shared Space</title>
     <script src="/socket.io/socket.io.js"></script>
-    <!-- โหลดไลบรารีสำหรับการเรนเดอร์ Markdown และทำความสะอาด HTML -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+    <!-- โหลด Lucide Icons สำหรับดึงไอคอนสวยงามมาใช้งาน -->
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         :root {
-            --bg-primary: #1e1e2e;
-            --bg-secondary: #252538;
-            --text-main: #cdd6f4;
-            --accent-blue: #89b4fa;
-            --border-color: #313244;
+            --bg-pure: #000000;
+            --glass-bg: rgba(18, 18, 18, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-border-focus: rgba(255, 255, 255, 0.2);
+            --text-primary: #f4f4f5;
+            --text-secondary: #a1a1aa;
+            --accent-blue: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.15);
         }
 
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
 
         body {
-            background-color: var(--bg-primary);
-            color: var(--text-main);
-            height: 100vh;
+            background-color: var(--bg-pure);
+            background-image: radial-gradient(circle at top, #111115 0%, #000000 100%);
+            color: var(--text-primary);
+            height: 100dvh;
             display: flex;
             justify-content: center;
             align-items: center;
+            overflow: hidden; /* ล็อคไม่ให้เลื่อนหน้าจอหลัก */
         }
 
-        /* หน้า Login */
+        /* หน้าต่างกรอกชื่อ (Liquid Glass Overlay) */
         #login-screen {
-            background-color: var(--bg-secondary);
-            padding: 30px;
-            border-radius: 12px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: 40px 30px;
+            border-radius: 24px;
             text-align: center;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            border: 1px solid var(--border-color);
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            width: 90%;
+            max-width: 400px;
+            z-index: 10;
+        }
+
+        #login-screen h2 {
+            font-weight: 600;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
         }
 
         #login-screen input {
-            padding: 10px;
-            width: 80%;
-            margin-bottom: 15px;
-            border-radius: 6px;
-            border: 1px solid var(--border-color);
-            background-color: var(--bg-primary);
+            padding: 14px 18px;
+            width: 100%;
+            margin-top: 20px;
+            margin-bottom: 16px;
+            border-radius: 12px;
+            border: 1px solid var(--glass-border);
+            background-color: rgba(255, 255, 255, 0.03);
             color: white;
+            font-size: 1rem;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        #login-screen input:focus {
+            border-color: var(--glass-border-focus);
+            background-color: rgba(255, 255, 255, 0.06);
+            box-shadow: 0 0 15px var(--accent-glow);
         }
 
         #login-screen button {
-            padding: 10px 20px;
-            background-color: var(--accent-blue);
+            width: 100%;
+            padding: 14px;
+            background-color: var(--text-primary);
             border: none;
-            border-radius: 6px;
+            border-radius: 12px;
             cursor: pointer;
-            color: #11111b;
-            font-weight: bold;
+            color: #000000;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.2s;
         }
 
-        /* โครงสร้างแอปพลิเคชันหลัก */
+        #login-screen button:hover {
+            opacity: 0.9;
+            transform: scale(0.98);
+        }
+
+        /* โครงสร้างพื้นที่ทำงานแชทหลัก */
         #app-container {
             display: none;
             width: 100vw;
-            height: 100vh;
-            grid-template-columns: 1fr;
-            transition: all 0.3s;
-        }
-
-        #app-container.show-ai {
-            grid-template-columns: 1fr 380px;
-        }
-
-        @media (max-width: 768px) {
-            #app-container.show-ai {
-                grid-template-columns: 1fr;
-            }
-            #ai-sidebar {
-                position: fixed;
-                right: 0;
-                top: 0;
-                height: 100%;
-                width: 100% !important;
-                z-index: 100;
-            }
-        }
-
-        /* พื้นที่แชทหลัก */
-        #main-chat-area {
-            display: flex;
+            height: 100dvh;
             flex-direction: column;
-            border-right: 1px solid var(--border-color);
             position: relative;
         }
 
+        /* หัวแชทแบบกระจก */
         .chat-header {
-            padding: 15px;
-            background-color: var(--bg-secondary);
-            border-bottom: 1px solid var(--border-color);
+            height: 70px;
+            padding: 0 24px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--glass-border);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            z-index: 5;
         }
 
+        .chat-header h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        /* กล่องแสดงผลแชทที่จะมีสกรอลบาร์เลื่อนดูเท่านั้น */
         .messages-container {
-            flex-grow: 1;
-            padding: 20px;
+            flex: 1;
+            padding: 24px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 16px;
+            scroll-behavior: smooth;
         }
 
-        .message-bubble {
-            background-color: var(--bg-secondary);
-            padding: 12px;
+        /* แถบสกรอลบาร์แบบเรียบง่าย */
+        .messages-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .messages-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .messages-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
             border-radius: 10px;
-            max-width: 75%;
+        }
+
+        /* บล็อกแสดงข้อความ */
+        .message-bubble {
+            background: var(--glass-bg);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            padding: 14px 18px;
+            border-radius: 18px;
+            max-width: 80%;
             align-self: flex-start;
-            position: relative;
-            border: 1px solid var(--border-color);
+            border: 1px solid var(--glass-border);
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
         }
 
         .message-bubble.me {
-            background-color: #313244;
+            background: rgba(255, 255, 255, 0.05);
             align-self: flex-end;
+            border-color: rgba(255, 255, 255, 0.15);
         }
 
         .message-header {
-            font-size: 0.8rem;
-            color: var(--accent-blue);
-            margin-bottom: 5px;
-            font-weight: bold;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
         }
 
-        /* ตกแต่งเนื้อหา ข้อความ ลิงก์ และ Markdown */
         .message-content {
             word-break: break-word;
-            line-height: 1.5;
+            font-size: 0.95rem;
+            line-height: 1.6;
         }
 
         .message-content a {
             color: var(--accent-blue);
-            text-decoration: underline;
+            text-decoration: none;
+            border-bottom: 1px solid var(--accent-blue);
         }
 
+        .message-content a:hover {
+            opacity: 0.8;
+        }
+
+        /* สไตล์ชุดเขียนโค้ดและ Markdown */
         .message-content code {
-            background-color: #11111b;
-            padding: 2px 4px;
-            border-radius: 4px;
+            background-color: rgba(255, 255, 255, 0.08);
+            padding: 2px 6px;
+            border-radius: 6px;
             font-family: monospace;
+            font-size: 0.85em;
         }
 
         .message-content pre {
-            background-color: #11111b;
-            padding: 10px;
-            border-radius: 6px;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 14px;
+            border-radius: 10px;
             overflow-x: auto;
-            margin: 5px 0;
+            margin: 8px 0;
+            border: 1px solid var(--glass-border);
         }
 
-        .copy-btn {
+        .message-content pre code {
+            background: none;
+            padding: 0;
+        }
+
+        /* ปุ่มคัดลอก และ ปุ่มขยายแบบซ่อนในไอคอน */
+        .bubble-actions {
+            display: flex;
+            gap: 8px;
+            align-self: flex-end;
+            margin-top: 4px;
+        }
+
+        .action-icon-btn {
             background: none;
             border: none;
+            color: var(--text-secondary);
             cursor: pointer;
-            font-size: 0.9rem;
-            color: #a6adc8;
-            margin-left: 8px;
-            display: inline-flex;
+            padding: 4px;
+            border-radius: 6px;
+            display: flex;
             align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
         }
 
-        .copy-btn:hover {
-            color: white;
+        .action-icon-btn:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.05);
         }
 
-        /* รูปภาพและไฟล์แนบ */
+        /* สไตล์ไฟล์ภาพแนบ */
         .attachment-preview {
             max-width: 100%;
-            max-height: 250px;
-            border-radius: 8px;
-            margin-top: 8px;
-            display: block;
+            max-height: 300px;
+            border-radius: 12px;
+            margin-top: 6px;
+            border: 1px solid var(--glass-border);
         }
 
         .file-link {
             display: inline-flex;
             align-items: center;
-            background-color: #11111b;
-            padding: 8px 12px;
-            border-radius: 6px;
-            margin-top: 8px;
+            gap: 8px;
+            background-color: rgba(255, 255, 255, 0.04);
+            padding: 10px 14px;
+            border-radius: 10px;
+            margin-top: 6px;
             text-decoration: none;
-            color: var(--text-main);
-            font-size: 0.9rem;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            border: 1px solid var(--glass-border);
         }
 
-        /* ฟอร์มรับข้อความด้านล่าง */
+        /* แถบควบคุมกรอกแชทด้านล่าง (Taskbar ล็อคติดขอบล่าง) */
         .chat-input-bar {
-            padding: 15px;
-            background-color: var(--bg-secondary);
-            border-top: 1px solid var(--border-color);
+            height: auto;
+            min-height: 80px;
+            padding: 16px 24px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-top: 1px solid var(--glass-border);
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
+            z-index: 5;
+        }
+
+        .input-wrapper {
+            flex-grow: 1;
+            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            padding: 4px 12px;
+            transition: all 0.2s;
+        }
+
+        .input-wrapper:focus-within {
+            border-color: var(--glass-border-focus);
+            box-shadow: 0 0 15px var(--accent-glow);
         }
 
         .input-box {
             flex-grow: 1;
-            padding: 12px;
-            background-color: var(--bg-primary);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
+            background: none;
+            border: none;
+            padding: 10px 6px;
             color: white;
+            font-size: 0.95rem;
+            outline: none;
             resize: none;
-            height: 44px;
-            max-height: 120px;
+            max-height: 100px;
         }
 
         .btn-action {
-            background-color: #313244;
+            background: none;
             border: none;
-            border-radius: 8px;
-            width: 40px;
-            height: 40px;
-            color: white;
+            border-radius: 10px;
+            width: 38px;
+            height: 38px;
+            color: var(--text-secondary);
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.2rem;
+            transition: all 0.2s;
         }
 
         .btn-action:hover {
-            background-color: var(--border-color);
+            color: var(--text-primary);
+            background-color: rgba(255, 255, 255, 0.06);
         }
 
         .btn-send {
-            background-color: var(--accent-blue);
-            color: #11111b;
-            font-weight: bold;
-            width: auto;
-            padding: 0 15px;
+            background-color: var(--text-primary);
+            color: #000000;
         }
 
-        /* AI Side Panel */
-        #ai-sidebar {
-            display: none;
-            background-color: #181825;
-            border-left: 1px solid var(--border-color);
-            flex-direction: column;
+        .btn-send:hover {
+            opacity: 0.9;
         }
 
-        /* ปุ่มเปิดแผงควบคุม AI */
-        #ai-toggle {
-            background-color: #fab387;
-            color: #11111b;
-            font-weight: bold;
-        }
-
-        /* โหมดขยายจอสำหรับ Markdown */
+        /* หน้าต่างพรีวิวขนาดใหญ่กรณีที่กด "ขยายขนาด" ข้อความ */
         .fullscreen-msg {
             position: fixed !important;
-            top: 5%;
-            left: 5%;
-            width: 90% !important;
-            height: 90% !important;
+            top: 24px;
+            bottom: 24px;
+            left: 24px;
+            right: 24px;
+            width: auto !important;
+            height: auto !important;
             max-width: none !important;
             z-index: 1000;
-            background-color: var(--bg-secondary);
-            box-shadow: 0 0 30px rgba(0,0,0,0.8);
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
+            background-color: rgba(10, 10, 10, 0.95) !important;
+            backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+            border-radius: 24px;
+            padding: 30px !important;
         }
 
-        .expand-btn {
-            background: none;
-            border: none;
-            color: var(--accent-blue);
-            cursor: pointer;
-            font-size: 0.8rem;
-            float: right;
+        .fullscreen-msg .message-content {
+            overflow-y: auto;
+            max-height: 85%;
         }
     </style>
 </head>
@@ -293,56 +368,39 @@
 
     <!-- หน้าต่างใส่ชื่อ -->
     <div id="login-screen">
-        <h2>กรุณาตั้งชื่อเพื่อเข้าร่วมแชท</h2>
-        <p style="font-size: 0.9rem; color:#a6adc8; margin: 10px 0 20px;">เพื่อเช็กชื่อผู้ใช้งานที่ซ้ำกันในระบบ</p>
-        <input type="text" id="username-input" placeholder="พิมพ์ชื่อผู้ใช้..." maxlength="20">
-        <br>
-        <button onclick="registerUser()">เข้าร่วมห้องแชท</button>
+        <h2>ระบุชื่อเข้าใช้งาน</h2>
+        <p style="font-size: 0.85rem; color: var(--text-secondary);">โปรดกรอกชื่อที่ไม่มีคนอื่นใช้ขณะนี้</p>
+        <input type="text" id="username-input" placeholder="กรอกชื่อผู้ใช้..." maxlength="20" onkeypress="handleEnter(event)">
+        <button onclick="registerUser()">เข้าร่วม</button>
     </div>
 
-    <!-- โครงสร้างแอปพลิเคชันหลัก -->
+    <!-- โครงสร้างแอปพลิเคชันแชทล็อคหน้าจอ -->
     <div id="app-container">
-        <!-- แชทกลุ่มหลัก -->
-        <div id="main-chat-area">
-            <div class="chat-header">
-                <div>
-                    <h3 id="room-title">Shared Global Chat</h3>
-                    <span id="active-user-name" style="font-size: 0.8rem; color:#a6adc8;"></span>
-                </div>
-                <!-- ปุ่มบวกคุยกับ AI -->
-                <button class="btn-action" id="ai-toggle" onclick="toggleAISidebar()">🤖 +</button>
-            </div>
-            
-            <div class="messages-container" id="chat-messages">
-                <!-- ข้อความแชทกลุ่มจะแสดงตรงนี้ -->
-            </div>
-
-            <div class="chat-input-bar">
-                <input type="file" id="file-input" style="display: none;" onchange="handleFileSelected(event)">
-                <button class="btn-action" onclick="document.getElementById('file-input').click()">📎</button>
-                <textarea class="input-box" id="message-input" placeholder="พิมพ์ข้อความ... (รองรับ Markdown)"></textarea>
-                <button class="btn-action btn-send" onclick="sendChat()">ส่ง</button>
+        <div class="chat-header">
+            <div>
+                <h3>ช่องแชทส่วนกลาง</h3>
+                <span id="active-user-name" style="font-size: 0.75rem; color: var(--text-secondary);"></span>
             </div>
         </div>
+        
+        <!-- ส่วนนี้เป็นสกรอลล์บาร์ข้อความเท่านั้น -->
+        <div class="messages-container" id="chat-messages"></div>
 
-        <!-- แผง AI แชทด้านข้าง -->
-        <div id="ai-sidebar">
-            <div class="chat-header">
-                <h3>ระบบคู่คิด AI Helper</h3>
-                <button class="btn-action" style="font-size: 0.9rem;" onclick="toggleAISidebar()">ปิด ✕</button>
+        <!-- Taskbar ด้านล่างล็อคตายตัว -->
+        <div class="chat-input-bar">
+            <input type="file" id="file-input" style="display: none;" onchange="handleFileSelected(event)">
+            
+            <button class="btn-action" onclick="document.getElementById('file-input').click()" title="แนบไฟล์">
+                <i data-lucide="plus"></i>
+            </button>
+            
+            <div class="input-wrapper">
+                <textarea class="input-box" id="message-input" rows="1" placeholder="พิมพ์ข้อความที่นี่... (รองรับ Markdown)" onkeydown="handleChatSubmit(event)"></textarea>
             </div>
-            <div class="messages-container" id="ai-messages">
-                <div class="message-bubble">
-                    <div class="message-header">ระบบ AI</div>
-                    <div class="message-content">สวัสดีครับ! ผมเป็นผู้ช่วยตอบคำถาม สามารถพิมพ์คุย แปลงข้อความ หรือตรวจสอบไฟล์รูปภาพได้เลยครับ</div>
-                </div>
-            </div>
-            <div class="chat-input-bar">
-                <input type="file" id="ai-file-input" style="display: none;" onchange="handleAIFileSelected(event)">
-                <button class="btn-action" onclick="document.getElementById('ai-file-input').click()">📎</button>
-                <textarea class="input-box" id="ai-input" placeholder="ถามข้อมูล AI ตรงนี้..."></textarea>
-                <button class="btn-action btn-send" style="background-color: #fab387;" onclick="sendToAI()">ถาม</button>
-            </div>
+            
+            <button class="btn-action btn-send" onclick="sendChat()" title="ส่ง">
+                <i data-lucide="send"></i>
+            </button>
         </div>
     </div>
 
@@ -350,27 +408,34 @@
         const socket = io();
         let myUsername = '';
         let selectedFile = null;
-        let aiSelectedFile = null;
 
-        // ฟังก์ชันสมัครชื่อเข้าใช้งาน
+        // จัดการเมื่อเปิดหน้ารันระบบไอคอนจากไลบรารี Lucide
+        window.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+        });
+
+        function handleEnter(e) {
+            if (e.key === 'Enter') registerUser();
+        }
+
         function registerUser() {
             const input = document.getElementById('username-input');
             const username = input.value.trim();
-            if (!username) return alert('กรุณาระบุชื่อผู้ใช้');
+            if (!username) return;
 
             socket.emit('check-username', username, (res) => {
                 if (res.success) {
                     myUsername = username;
                     document.getElementById('login-screen').style.display = 'none';
-                    document.getElementById('app-container').style.display = 'grid';
-                    document.getElementById('active-user-name').innerText = `คุณ: ${myUsername}`;
+                    document.getElementById('app-container').style.display = 'flex';
+                    document.getElementById('active-user-name').innerText = `@${myUsername}`;
                 } else {
                     alert(res.error);
                 }
             });
         }
 
-        // ฟังก์ชันวิเคราะห์ URL ในข้อความธรรมดาให้กลายเป็นสีฟ้าและคลิกได้
+        // ตัวแปลง URL ให้เป็นลิงก์อัตโนมัติ
         function linkify(text) {
             const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
             return text.replace(urlRegex, (url) => {
@@ -378,7 +443,7 @@
             });
         }
 
-        // ประมวลผลและสร้างบล็อกข้อความ
+        // ประกอบและเรนเดอร์ข้อความแชท
         function renderMessage(data) {
             const isMe = data.sender === myUsername;
             const bubble = document.createElement('div');
@@ -387,41 +452,44 @@
 
             const header = document.createElement('div');
             header.className = 'message-header';
-            header.innerHTML = `${escapeHTML(data.sender)} <span style="font-size:0.7rem; color:#a6adc8; font-weight:normal;">${data.timestamp}</span>`;
-            
-            // ปุ่มเปิด/ปิดเต็มหน้าจอ (สำหรับอ่าน Markdown)
-            const expandBtn = document.createElement('button');
-            expandBtn.className = 'expand-btn';
-            expandBtn.innerText = '↕ ขยาย';
-            expandBtn.onclick = () => toggleFullscreen(`msg-${data.id}`);
-            header.appendChild(expandBtn);
+            header.innerHTML = `<span>${escapeHTML(data.sender)}</span><span>${data.timestamp}</span>`;
 
             const content = document.createElement('div');
             content.className = 'message-content';
 
-            // ตรวจสอบว่าเป็น Markdown หรือความต้องการข้อความปกติ
             const hasMarkdown = /[*_#`\[\]\-]/.test(data.text);
             if (hasMarkdown) {
-                // แปลง Markdown อย่างปลอดภัย
                 const cleanHTML = DOMPurify.sanitize(marked.parse(data.text));
                 content.innerHTML = cleanHTML;
             } else {
                 content.innerHTML = linkify(escapeHTML(data.text));
             }
 
-            // เพิ่มปุ่มคัดลอกข้อความ
-            if (data.text) {
-                const copyBtn = document.createElement('button');
-                copyBtn.className = 'copy-btn';
-                copyBtn.innerHTML = '📋 คัดลอก';
-                copyBtn.onclick = () => copyToClipboard(data.text);
-                content.appendChild(copyBtn);
-            }
+            // แถบไอคอนคำสั่งใต้ข้อความแชท
+            const actions = document.createElement('div');
+            actions.className = 'bubble-actions';
+
+            // ไอคอนขยายข้อความแบบเต็มจอ
+            const expandBtn = document.createElement('button');
+            expandBtn.className = 'action-icon-btn';
+            expandBtn.innerHTML = `<i data-lucide="maximize-2" style="width:14px;height:14px;"></i>`;
+            expandBtn.title = "ขยายขนาด";
+            expandBtn.onclick = () => toggleFullscreen(`msg-${data.id}`);
+
+            // ไอคอนคัดลอกข้อความ
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'action-icon-btn';
+            copyBtn.innerHTML = `<i data-lucide="copy" style="width:14px;height:14px;"></i>`;
+            copyBtn.title = "คัดลอก";
+            copyBtn.onclick = () => copyToClipboard(data.text);
+
+            actions.appendChild(expandBtn);
+            if (data.text) actions.appendChild(copyBtn);
 
             bubble.appendChild(header);
             bubble.appendChild(content);
+            bubble.appendChild(actions);
 
-            // หากมีการแนบรูปภาพหรือไฟล์
             if (data.file) {
                 if (data.file.type.startsWith('image/')) {
                     const img = document.createElement('img');
@@ -433,7 +501,7 @@
                     link.href = data.file.data;
                     link.download = data.file.name;
                     link.className = 'file-link';
-                    link.innerText = `📂 ดาวน์โหลด: ${data.file.name}`;
+                    link.innerHTML = `<i data-lucide="download" style="width:16px;height:16px;"></i> <span>${data.file.name}</span>`;
                     bubble.appendChild(link);
                 }
             }
@@ -441,7 +509,6 @@
             return bubble;
         }
 
-        // จัดการเมื่อเลือกไฟล์
         function handleFileSelected(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -452,16 +519,20 @@
                     type: file.type,
                     data: e.target.result
                 };
-                alert(`เลือกไฟล์สำเร็จ: ${file.name}`);
             };
             reader.readAsDataURL(file);
         }
 
-        // ส่งแชทกลุ่มหลัก
+        function handleChatSubmit(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendChat();
+            }
+        }
+
         function sendChat() {
             const input = document.getElementById('message-input');
             const text = input.value.trim();
-            
             if (!text && !selectedFile) return;
 
             socket.emit('send-message', {
@@ -471,134 +542,62 @@
 
             input.value = '';
             selectedFile = null;
+            document.getElementById('file-input').value = '';
         }
 
-        // จัดการเหตุการณ์จาก Socket.io
         socket.on('chat-history', (history) => {
             const container = document.getElementById('chat-messages');
             container.innerHTML = '';
             history.forEach(data => {
                 container.appendChild(renderMessage(data));
             });
-            scrollToBottom('chat-messages');
+            lucide.createIcons(); // อัปเดตไอคอนที่ถูกเพิ่มใหม่
+            scrollToBottom();
         });
 
         socket.on('new-message', (data) => {
             const container = document.getElementById('chat-messages');
             container.appendChild(renderMessage(data));
-            scrollToBottom('chat-messages');
+            lucide.createIcons();
+            scrollToBottom();
         });
 
         socket.on('user-joined', (username) => {
-            showNotification(`${username} ได้เข้าร่วมการสนทนา`);
+            showNotification(`${username} เข้าร่วมห้องแชทแล้ว`);
         });
 
         socket.on('user-left', (username) => {
             showNotification(`${username} ออกจากห้องแชทแล้ว`);
         });
 
-        // เปิด-ปิดแท็บ AI
-        function toggleAISidebar() {
-            const container = document.getElementById('app-container');
-            const sidebar = document.getElementById('ai-sidebar');
-            if (sidebar.style.display === 'flex') {
-                sidebar.style.display = 'none';
-                container.classList.remove('show-ai');
-            } else {
-                sidebar.style.display = 'flex';
-                container.classList.add('show-ai');
-            }
-        }
-
-        // จัดการเมื่อเลือกไฟล์ฝั่ง AI
-        function handleAIFileSelected(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                aiSelectedFile = {
-                    name: file.name,
-                    type: file.type,
-                    data: e.target.result
-                };
-                alert(`พร้อมส่งไฟล์ภาพให้ AI: ${file.name}`);
-            };
-            reader.readAsDataURL(file);
-        }
-
-        // ฟังก์ชันรับส่งคำตอบกับ AI (จำลองการทำงานฝั่ง Front-end)
-        function sendToAI() {
-            const input = document.getElementById('ai-input');
-            const text = input.value.trim();
-            if (!text && !aiSelectedFile) return;
-
-            const container = document.getElementById('ai-messages');
-
-            // แสดงคำถามของผู้ใช้ในแท็บ AI
-            const userMsg = document.createElement('div');
-            userMsg.className = 'message-bubble me';
-            userMsg.innerHTML = `<div class="message-header">คุณ</div><div class="message-content">${escapeHTML(text)}</div>`;
-            if (aiSelectedFile && aiSelectedFile.type.startsWith('image/')) {
-                userMsg.innerHTML += `<img src="${aiSelectedFile.data}" class="attachment-preview">`;
-            }
-            container.appendChild(userMsg);
-            scrollToBottom('ai-messages');
-
-            input.value = '';
-
-            // จำลองการโหลดคำตอบจากปัญญาประดิษฐ์ (สามารถดึง API OpenAI/Gemini ไปใช้ตรงนี้ได้)
-            setTimeout(() => {
-                const aiMsg = document.createElement('div');
-                aiMsg.className = 'message-bubble';
-                aiMsg.innerHTML = `
-                    <div class="message-header">ระบบ AI</div>
-                    <div class="message-content">
-                        ขอบคุณสำหรับข้อมูลครับ! นี่คือการประมวลผลระบบจำลองการทำงาน:<br>
-                        - ได้รับข้อความ: <strong>${text || 'มีเฉพาะรูปภาพ'}</strong><br>
-                        - ตรวจสอบไฟล์แนบ: ${aiSelectedFile ? aiSelectedFile.name : 'ไม่มี'}<br>
-                        <em>(คุณสามารถแก้ไขและเชื่อมต่อ AI API เช่น Google Gemini, OpenAI, Claude เพิ่มเติมได้)</em>
-                    </div>
-                `;
-                container.appendChild(aiMsg);
-                scrollToBottom('ai-messages');
-                aiSelectedFile = null;
-            }, 1000);
-        }
-
-        // ย่อ-ขยายหน้าต่างกรณีเป็นงานเขียน Markdown
         function toggleFullscreen(elementId) {
             const el = document.getElementById(elementId);
             el.classList.toggle('fullscreen-msg');
         }
 
-        // คัดลอกไปยัง Clipboard
         function copyToClipboard(text) {
             navigator.clipboard.writeText(text).then(() => {
-                alert('คัดลอกข้อความสำเร็จ!');
-            }).catch(err => {
-                console.error('คัดลอกล้มเหลว: ', err);
+                alert('คัดลอกเนื้อหาไปยังคลิปบอร์ดแล้ว');
             });
         }
 
-        // แสดงแจ้งเตือนระบบเข้า-ออกห้องแชท
         function showNotification(text) {
             const container = document.getElementById('chat-messages');
-            const notification = document.createElement('div');
-            notification.style.cssText = 'align-self: center; background: #313244; color: #a6adc8; font-size: 0.8rem; padding: 4px 12px; border-radius: 12px; margin: 5px 0;';
-            notification.innerText = text;
-            container.appendChild(notification);
-            scrollToBottom('chat-messages');
+            const notice = document.createElement('div');
+            notice.style.cssText = 'align-self: center; background: rgba(255,255,255,0.04); color: var(--text-secondary); font-size: 0.75rem; padding: 6px 14px; border-radius: 99px; border: 1px solid var(--glass-border); margin: 8px 0;';
+            notice.innerText = text;
+            container.appendChild(notice);
+            scrollToBottom();
         }
 
-        // เครื่องมือล้างอักขระพิเศษเพื่อป้องกัน XSS
         function escapeHTML(str) {
             return str.replace(/[&<>'"]/g, 
                 tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
             );
         }
 
-        function scrollToBottom(id) {
-            const el = document.getElementById(id);
+        function scrollToBottom() {
+            const el = document.getElementById('chat-messages');
             el.scrollTop = el.scrollHeight;
         }
     </script>
