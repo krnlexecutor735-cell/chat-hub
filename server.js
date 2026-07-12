@@ -2,25 +2,40 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-    maxHttpBufferSize: 1e7 // จำกัดขนาดไฟล์ที่ส่งผ่าน Socket ไว้ที่ 10MB
+    maxHttpBufferSize: 1e7
 });
 
 const PORT = process.env.PORT || 3000;
 
+// รองรับการเปิดไฟล์ Static จากทั้งโฟลเดอร์ public และโฟลเดอร์นอกสุด (Root)
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(__dirname));
 
-// เก็บข้อมูลใน Memory
+// ฟังก์ชันหาตำแหน่งไฟล์ index.html
+app.get('/', (req, res) => {
+    const publicPath = path.join(__dirname, 'public', 'index.html');
+    const rootPath = path.join(__dirname, 'index.html');
+
+    if (fs.existsSync(publicPath)) {
+        res.sendFile(publicPath);
+    } else if (fs.existsSync(rootPath)) {
+        res.sendFile(rootPath);
+    } else {
+        res.status(404).send('ไม่พบไฟล์ index.html กรุณาตรวจสอบว่าชื่อไฟล์ถูกต้องและอยู่ภายในโปรเจกต์');
+    }
+});
+
 const activeUsers = new Set();
 const chatHistory = [];
 
 io.on('connection', (socket) => {
     let currentUsername = null;
 
-    // ตรวจสอบและลงทะเบียนชื่อผู้ใช้
     socket.on('check-username', (username, callback) => {
         const trimmedName = username.trim();
         if (!trimmedName) {
@@ -31,16 +46,11 @@ io.on('connection', (socket) => {
             currentUsername = trimmedName;
             activeUsers.add(currentUsername);
             callback({ success: true });
-            
-            // ส่งประวัติการคุยให้ผู้ใช้ใหม่เห็น
             socket.emit('chat-history', chatHistory);
-            
-            // แจ้งเตือนทุกคนว่ามีคนเข้าร่วมแชท
             io.emit('user-joined', currentUsername);
         }
     });
 
-    // รับและกระจายข้อความแชทกลุ่ม
     socket.on('send-message', (data) => {
         if (!currentUsername) return;
 
@@ -48,18 +58,16 @@ io.on('connection', (socket) => {
             id: Date.now() + Math.random().toString(36).substr(2, 9),
             sender: currentUsername,
             text: data.text || '',
-            file: data.file || null, // { name: string, type: string, data: base64 }
+            file: data.file || null,
             timestamp: new Date().toLocaleTimeString()
         };
 
         chatHistory.push(messageData);
-        // จำกัดประวัติการแชทไว้ที่ 100 ข้อความล่าสุดเพื่อประหยัด Memory
         if (chatHistory.length > 100) chatHistory.shift();
 
         io.emit('new-message', messageData);
     });
 
-    // ตัดการเชื่อมต่อ
     socket.on('disconnect', () => {
         if (currentUsername) {
             activeUsers.delete(currentUsername);
