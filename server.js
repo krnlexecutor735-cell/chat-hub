@@ -2,16 +2,32 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs'); // ดึงระบบจัดการไฟล์ของ Node.js มาช่วยตรวจสอบ
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-    maxHttpBufferSize: 1e7 // จำกัดขนาดไฟล์อัปโหลดไว้ที่ 10MB
+    maxHttpBufferSize: 1e7 
 });
 
 const PORT = process.env.PORT || 3000;
 
+// ให้บริการไฟล์ทั่วไปจากโฟลเดอร์ public (ถ้ามี)
 app.use(express.static(path.join(__dirname, 'public')));
+
+// เส้นทางหลัก: ตรวจสอบและส่งไฟล์ index.html จากสองตำแหน่งที่เป็นไปได้
+app.get('/', (req, res) => {
+    const publicPath = path.join(__dirname, 'public', 'index.html');
+    const rootPath = path.join(__dirname, 'index.html');
+    
+    if (fs.existsSync(publicPath)) {
+        res.sendFile(publicPath);
+    } else if (fs.existsSync(rootPath)) {
+        res.sendFile(rootPath);
+    } else {
+        res.status(404).send('<h2>ไม่พบไฟล์ index.html</h2><p>กรุณาตรวจสอบโครงสร้างไฟล์บน GitHub ของคุณ</p>');
+    }
+});
 
 const activeUsers = new Set();
 const chatHistory = [];
